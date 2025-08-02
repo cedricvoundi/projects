@@ -171,11 +171,11 @@ app.get('/api/countries', (req, res) => {
 });
 
 // En production, servir l'app React pour toutes les autres routes
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'build', 'index.html'));
-  });
-}
+// if (process.env.NODE_ENV === 'production') {
+//   app.get('*', (req, res) => {
+//     res.sendFile(path.join(__dirname, 'build', 'index.html'));
+//   });
+// }
 
 // Gestion des erreurs 404
 app.use('*', (req, res) => {
