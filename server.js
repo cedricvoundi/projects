@@ -1,8 +1,8 @@
-// server.js
-require('dotenv').config();
+// server.js - Version mise à jour avec génération d'ID unique
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,7 +15,6 @@ app.use(cors({
   credentials: true
 }));
 
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -24,7 +23,14 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'build')));
 }
 
-// Route pour traiter les investissements
+// Fonction pour générer un ID unique d'investissement
+function generateInvestmentId() {
+  const timestamp = Date.now();
+  const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `INV-${timestamp}-${randomSuffix}`;
+}
+
+// Route pour traiter les investissements avec génération d'ID
 app.post('/api/investment', (req, res) => {
   try {
     const { country, name, phone, network, amount, countryCode } = req.body;
@@ -33,7 +39,8 @@ app.post('/api/investment', (req, res) => {
     if (!country || !name || !phone || !network || !amount) {
       return res.status(400).json({
         success: false,
-        message: 'Tous les champs sont requis'
+        message: 'Tous les champs sont requis',
+        error: 'MISSING_FIELDS'
       });
     }
 
@@ -42,7 +49,8 @@ app.post('/api/investment', (req, res) => {
     if (isNaN(amountNumber) || amountNumber <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Le montant doit être un nombre positif'
+        message: 'Le montant doit être un nombre positif',
+        error: 'INVALID_AMOUNT'
       });
     }
 
@@ -50,12 +58,17 @@ app.post('/api/investment', (req, res) => {
     if (!/^\d+$/.test(phone)) {
       return res.status(400).json({
         success: false,
-        message: 'Le numéro de téléphone ne doit contenir que des chiffres'
+        message: 'Le numéro de téléphone ne doit contenir que des chiffres',
+        error: 'INVALID_PHONE'
       });
     }
 
+    // Générer un ID unique pour l'investissement
+    const investmentId = generateInvestmentId();
+
     // Log des données reçues dans la console
     console.log('=== NOUVEAU INVESTISSEMENT REÇU ===');
+    console.log('ID généré:', investmentId);
     console.log('Timestamp:', new Date().toISOString());
     console.log('Pays:', country);
     console.log('Nom:', name);
@@ -65,33 +78,36 @@ app.post('/api/investment', (req, res) => {
     console.log('===================================');
 
     // Ici, vous pouvez ajouter la logique pour sauvegarder en base de données
-    // Exemple : await saveToDatabase({ country, name, phone, network, amount, countryCode });
+    // Exemple : await saveToDatabase({ investmentId, country, name, phone, network, amount, countryCode });
 
     // Simulation d'un traitement asynchrone
     setTimeout(() => {
-      console.log('Investissement traité avec succès pour:', name);
+      console.log(`✅ Investissement ${investmentId} traité avec succès pour:`, name);
     }, 1000);
 
-    // Réponse de succès
+    // Réponse de succès avec l'ID généré
     res.status(200).json({
       success: true,
       message: 'Investissement enregistré avec succès',
+      investmentId: investmentId,
       data: {
-        id: Date.now(), // ID temporaire pour la démo
+        id: investmentId,
         country,
         name,
         phone: `${countryCode} ${phone}`,
         network,
         amount: amountNumber,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        status: 'En attente de confirmation'
       }
     });
 
   } catch (error) {
-    console.error('Erreur lors du traitement de l\'investissement:', error);
+    console.error('❌ Erreur lors du traitement de l\'investissement:', error);
     res.status(500).json({
       success: false,
-      message: 'Erreur interne du serveur'
+      message: 'Erreur interne du serveur',
+      error: 'INTERNAL_ERROR'
     });
   }
 });
@@ -101,7 +117,8 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Serveur Africa Investment opérationnel',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    version: '2.1.0'
   });
 });
 
@@ -170,12 +187,40 @@ app.get('/api/countries', (req, res) => {
   });
 });
 
+// Route pour obtenir les détails d'un investissement par ID
+app.get('/api/investment/:id', (req, res) => {
+  const { id } = req.params;
+  
+  // Validation de l'ID
+  if (!id || !id.startsWith('INV-')) {
+    return res.status(400).json({
+      success: false,
+      message: 'ID d\'investissement invalide'
+    });
+  }
+  
+  // Ici vous pourriez récupérer les données depuis une base de données
+  // Pour cette démo, on simule une réponse
+  res.status(200).json({
+    success: true,
+    data: {
+      id: id,
+      status: 'En attente de confirmation',
+      createdAt: new Date().toISOString(),
+      steps: [
+        { name: 'Confirmation par l\'entreprise', status: 'En attente', order: 1 },
+        { name: 'Finalisation de l\'investissement', status: 'En attente', order: 2 }
+      ]
+    }
+  });
+});
+
 // En production, servir l'app React pour toutes les autres routes
-// if (process.env.NODE_ENV === 'production') {
-//   app.get('*', (req, res) => {
-//     res.sendFile(path.join(__dirname, 'build', 'index.html'));
-//   });
-// }
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'build', 'index.html'));
+  });
+}
 
 // Gestion des erreurs 404
 app.use('*', (req, res) => {
@@ -187,7 +232,7 @@ app.use('*', (req, res) => {
 
 // Gestion globale des erreurs
 app.use((error, req, res, next) => {
-  console.error('Erreur globale:', error);
+  console.error('❌ Erreur globale:', error);
   res.status(500).json({
     success: false,
     message: 'Erreur interne du serveur'
@@ -202,6 +247,7 @@ app.listen(PORT, () => {
   console.log(`🌍 Environnement: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 URL: http://localhost:${PORT}`);
   console.log(`📋 API Health Check: http://localhost:${PORT}/api/health`);
+  console.log(`🆔 Génération d'ID unique activée`);
   console.log('===========================================');
 });
 
